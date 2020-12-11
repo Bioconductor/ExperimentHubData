@@ -20,7 +20,7 @@ globalVariables(c("BiocVersion", "Coordinate_1_based", "DataProvider",
                   "Description", "DispatchClass", "Genome", "Location_Prefix",
                   "Maintainer", "RDataClass", "RDataDateAdded", "RDataPath",
                   "SourceType", "SourceUrl", "SourceVersion", "Species",
-                  "TaxonomyId", "Title", "PreparerClass"))
+                  "TaxonomyId", "Title", "PreparerClass", "HubId"))
 
 makeExperimentHubMetadata <- function(pathToPackage, fileName=character())
 {
@@ -60,7 +60,8 @@ makeExperimentHubMetadata <- function(pathToPackage, fileName=character())
                                        RDataPath=.RDataPaths[[x]],
                                        DispatchClass=DispatchClass,
                                        PreparerClass=PreparerClass,
-                                       Location_Prefix=.Location_Prefix[[x]]))
+                                       Location_Prefix=.Location_Prefix[[x]],
+                                       HubId=HubId))
         }
     )
 }
@@ -120,7 +121,8 @@ ExperimentHubMetadata <-
         Notes=NA_character_,
         DispatchClass=NA_character_,
         PreparerClass=NA_character_,
-        Location_Prefix='http://s3.amazonaws.com/experimenthub/')
+        Location_Prefix='http://s3.amazonaws.com/experimenthub/',
+        HubId='')
 {
     ## FIXME: move these checks to a general validity method
     ##        on HubMetadata that can be reused
@@ -156,6 +158,7 @@ ExperimentHubMetadata <-
     AnnotationHubData:::.checkFileLengths(RDataPath, DispatchClass)
     AnnotationHubData:::.checkValidSingleString(Title)
     AnnotationHubData:::.checkValidSingleString(Description)
+    AnnotationHubData:::.checkHubId(HubId)
 
     new("ExperimentHubMetadata",
         ExperimentHubRoot=ExperimentHubRoot,
@@ -185,7 +188,8 @@ ExperimentHubMetadata <-
         SourceMd5=NA_character_,
         SourceLastModifiedDate=as.POSIXct(NA_character_), #from url in AHD
         ## NOTE: not relevant
-        Recipe=NA_character_
+        Recipe=NA_character_,
+        HubId=HubId
     )
 }
 
@@ -210,7 +214,7 @@ setMethod("show", "ExperimentHubMetadata",
                   "Species", "TaxonomyId", "Location_Prefix",
                   "RDataClass", "RDataDateAdded",
                   "RDataPath", "SourceLastModifiedDate", "SourceType",
-                  "SourceUrl", "SourceVersion", "Tags", "DispatchClass")) {
+                  "SourceUrl", "SourceVersion", "Tags", "DispatchClass", "HubId")) {
         value <- slot(object, slt)
         txt <- paste0(slt, ": ", paste0(as.character(value), collapse=" "))
         cat(strwrap(txt), sep="\n  ")
