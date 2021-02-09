@@ -24,20 +24,51 @@ globalVariables(c("BiocVersion", "Coordinate_1_based", "DataProvider",
 
 makeExperimentHubMetadata <- function(pathToPackage, fileName=character())
 {
-    ## Differences from makeAnnotationHubMetadata:
-    ## - package put in PreparerClass slot
     stopifnot(length(fileName) <= 1)
-    meta <- AnnotationHubData:::.readMetadataFromCsv(pathToPackage, fileName=fileName)
-    package <- basename(pathToPackage)
-    meta$PreparerClass <- package
-
-    if ("tags" %in% tolower(names(meta)))
-        message("Tags are specified by biocViews entry in the",
-                " DESCRIPTION file.\nIgnoring Tags in the metadata file.")
     description <- read.dcf(file.path(pathToPackage, "DESCRIPTION"))
-    .tags <- strsplit(gsub("\\s", "", description[,"biocViews"]), ",")[[1]]
-    if (length(.tags) <= 1) stop("Add 2 or more biocViews to your DESCRIPTION")
-    .checkValidViews(.tags, "ExperimentData")
+    .views <- strsplit(gsub("\\s", "", description[,"biocViews"]), ",")[[1]]
+    if (length(.views) <= 1) stop("Add 2 or more biocViews to your DESCRIPTION. Required: ExperimentHub or ExperimentHubSoftware")
+     AnnotationHubData:::.checkValidViews(.views)
+    ## filter views for common/not useful terms
+    .views = setdiff(.views,
+                     c("ExperimentData","ExperimentHub","SpecimenSource","PackageTypeData",
+                       "Software", "AssayDomain", "BiologicalQuestion","ResearchField", "Technology", "WorkflowStep")
+                     )
+
+
+    meta <- AnnotationHubData:::.readMetadataFromCsv(pathToPackage, fileName=fileName)
+    .package <- unname(description[,"Package"])
+    meta$PreparerClass <- .package
+
+
+    ## check for Tags in metadata
+    ## filter out packageName as already tracked in database with preparerclass
+    if (length(meta$Tags)){
+        .tags <- strsplit(meta$Tags, ":")
+        .tags <- lapply(.tags,
+                        FUN<- function(x, views, packageName){
+                            setdiff(sort(unique(c(x, views))), packageName)},
+                        views = .views, packageName=.package)
+        if (any(unlist(lapply(.tags, FUN=length)) < 1))
+            stop("Add 1 or more Tags to each resource by either\n",
+                 "  adding 'Tags' values to metadata or\n",
+                 "  adding additional meaningful biocViews terms in DESCRIPTION")
+    }else{
+        if (length(.views)){
+            .tags = vector("list", nrow(meta))
+            .tags <- lapply(.tags,
+                            FUN<- function(x, views, packageName){
+                                setdiff(sort(unique(views)), packageName)},
+                            views = .views, packageName=.package)
+        }else{
+            stop("Add 1 or more Tags to each resource by either\n",
+                 "  adding 'Tags' values to metadata or\n",
+                 "  adding additional meaningful biocViews terms in DESCRIPTION")
+        }
+    }
+    
+ 
+    
     .RDataPaths <- meta$RDataPath
     .Location_Prefix <- meta$Location_Prefix
     if (any(.Location_Prefix %in% "http://s3.amazonaws.com/annotationhub/")){
@@ -55,7 +86,7 @@ makeExperimentHubMetadata <- function(pathToPackage, fileName=character())
                                        Coordinate_1_based=Coordinate_1_based,
                                        DataProvider=DataProvider,
                                        Maintainer=Maintainer,
-                                       RDataClass=RDataClass, Tags=.tags,
+                                       RDataClass=RDataClass, Tags=.tags[[x]],
                                        RDataDateAdded=RDataDateAdded,
                                        RDataPath=.RDataPaths[[x]],
                                        DispatchClass=DispatchClass,
@@ -65,36 +96,6 @@ makeExperimentHubMetadata <- function(pathToPackage, fileName=character())
         }
     )
 }
-
-
-.checkValidViews <- function(views, repo){
-
-    msg = list()
-    biocViewsVocab <- NULL
-    data("biocViewsVocab", package="biocViews", envir=environment())
-    # check all valid terms
-    if (!all(views %in% nodes(biocViewsVocab))){
-        badViews <- views[!(views %in% graph::nodes(biocViewsVocab))]
-        badViewsVec <- paste(badViews, collapse=", ")
-        msg["invalid"] = paste0("Invalid biocViews term[s].\n    ", badViewsVec, "\n")
-    }
-    # check all come from same biocViews main category
-    parents <- unlist(lapply(views, BiocCheck:::getParent, biocViewsVocab), use.names=FALSE)
-    if (!all(parents == repo))
-        msg["Category"] = paste0("All biocViews terms must come from the ", repo, " category.\n")
-    # check that hub term present
-    if (repo == "AnnotationData" || repo == "ExperimentData"){
-        repo = paste0(gsub(repo, pattern="Data", replacement=""), "Hub")
-        if (!(repo %in% views))
-            msg["Hub"] = paste0("Please add ", repo, " to biocViews list in DESCRIPTION.\n")
-    }
-    if (length(msg) != 0){
-        myfunction <- function(index, msg){paste0("[", index, "] ", msg[index])}
-        fmt_msg <- unlist(lapply(seq_along(msg), msg = msg, FUN=myfunction))
-        stop("\n",fmt_msg)
-    }
-}
-
 
 
 ExperimentHubMetadata <-
